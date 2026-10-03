@@ -99,8 +99,8 @@ jobs:
           service: ${{ env.SERVICE_NAME }}
           region: ${{ vars.GCP_REGION }}
           image: ${{ steps.docker-build.outputs.IMAGE }}
-          service_account: ${{ env.APP_SA_NAME }}@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
           flags: |
+            --service-account=${{ env.APP_SA_NAME }}@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
             --platform=managed
             --allow-unauthenticated
             --memory=512Mi
