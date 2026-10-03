@@ -5,8 +5,8 @@ et des secrets injectés par GCP Secret Manager ou un fichier .env local.
 """
 
 from functools import lru_cache
-from typing import Set
-from pydantic import Field, field_validator
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     environment: str = Field(default="production", description="Environnement (development, production)")
 
     @property
-    def allowed_users_set(self) -> Set[int]:
+    def allowed_users_set(self) -> set[int]:
         """Retourne l'ensemble des IDs Telegram autorisés."""
         if not self.allowed_user_ids:
             return set()

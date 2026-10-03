@@ -1,6 +1,5 @@
 """Générateur de claviers interactifs (Inline Keyboards) pour Telegram."""
 
-from typing import List
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
@@ -23,7 +22,7 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_members_keyboard(members: List[str]) -> InlineKeyboardMarkup:
+def get_members_keyboard(members: list[str]) -> InlineKeyboardMarkup:
     """Clavier pour sélectionner un membre de la famille."""
     keyboard = []
     # Disposition 2 colonnes

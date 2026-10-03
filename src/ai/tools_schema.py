@@ -4,9 +4,9 @@ Définit les outils métier auxquels l'IA a accès pour interroger et agir
 sur les comptes de bibliothèque de la Ville de Paris.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
-GEMINI_TOOLS_DECLARATIONS: List[Dict[str, Any]] = [
+GEMINI_TOOLS_DECLARATIONS: list[dict[str, Any]] = [
     {
         "name": "get_loans",
         "description": "Récupère les emprunts en cours pour toute la famille ou selon des filtres précis (nom du membre, nom de la bibliothèque, ou échéance de retour dans X jours).",

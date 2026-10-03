@@ -5,6 +5,7 @@ et applique la liste blanche stricte des utilisateurs (whitelist).
 """
 
 import logging
+
 from telegram import Update
 from telegram.ext import (
     Application,

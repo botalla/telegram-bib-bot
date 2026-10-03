@@ -1,7 +1,8 @@
 """Tests unitaires pour BibService."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from src.services.bib_service import BibService
 

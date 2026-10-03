@@ -5,9 +5,8 @@ déclenche les outils métier appropriés (BibService) et formule des réponses
 concises, chaleureuses et adaptées à l'affichage mobile.
 """
 
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.ai.tools_schema import GEMINI_TOOLS_DECLARATIONS
 from src.config import Settings, get_settings
@@ -31,7 +30,7 @@ Règles de comportement :
 class GeminiAgent:
     """Agent Gemini avec Function Calling pour BiblioBot."""
 
-    def __init__(self, settings: Optional[Settings] = None, bib_service: Optional[BibService] = None):
+    def __init__(self, settings: Settings | None = None, bib_service: BibService | None = None):
         self.settings = settings or get_settings()
         self.bib_service = bib_service or BibService(settings=self.settings)
         self._client = None
@@ -52,7 +51,7 @@ class GeminiAgent:
             logger.error(f"Erreur d'initialisation du client Google GenAI : {e}")
             self._client = None
 
-    async def _execute_tool_call(self, name: str, args: Dict[str, Any]) -> Any:
+    async def _execute_tool_call(self, name: str, args: dict[str, Any]) -> Any:
         """Achemine l'appel d'outil Gemini vers la méthode correspondante du BibService."""
         logger.info(f"Exécution du Tool Call Gemini : {name} avec args={args}")
 
@@ -118,10 +117,10 @@ class GeminiAgent:
                 return {"error": f"Outil '{name}' inconnu."}
 
         except Exception as e:
-            logger.error(f"Erreur durant l'exécution de l'outil {name} : {e}", exc_info=True)
-            return {"error": f"Erreur lors de l'exécution : {str(e)}"}
+            logger.exception(f"Erreur durant l'exécution de l'outil {name} : {e}")
+            return {"error": f"Erreur lors de l'exécution : {e!s}"}
 
-    async def chat(self, user_message: str) -> Dict[str, Any]:
+    async def chat(self, user_message: str) -> dict[str, Any]:
         """Traite une question en langage naturel avec Function Calling."""
         if not self._client:
             return {
@@ -194,8 +193,8 @@ class GeminiAgent:
             }
 
         except Exception as e:
-            logger.error(f"Erreur lors du traitement Gemini : {e}", exc_info=True)
+            logger.exception(f"Erreur lors du traitement Gemini : {e}")
             return {
-                "text": f"Désolé, j'ai rencontré une difficulté lors de l'analyse de votre demande. Vous pouvez utiliser les commandes directes comme /emprunts ou /urgences.",
+                "text": "Désolé, j'ai rencontré une difficulté lors de l'analyse de votre demande. Vous pouvez utiliser les commandes directes comme /emprunts ou /urgences.",
                 "tools_used": [],
             }

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, List, Optional
+
 import pytest
 
 from src.config import Settings
@@ -18,15 +18,15 @@ class MockLoan:
     due_date: date
     is_renewable: bool = True
     renewal_count: int = 0
-    thumbnail_url: Optional[str] = "https://example.com/cover.jpg"
-    default_thumbnail_url: Optional[str] = None
+    thumbnail_url: str | None = "https://example.com/cover.jpg"
+    default_thumbnail_url: str | None = None
 
 
 @dataclass
 class MockAccount:
     account_name: str
-    unique_identifier: Optional[str]
-    loans: List[MockLoan]
+    unique_identifier: str | None
+    loans: list[MockLoan]
 
 
 @dataclass
@@ -34,21 +34,21 @@ class MockLibraryTrip:
     library: str
     total_items: int
     earliest_due_date: date
-    loans: List[MockLoan]
+    loans: list[MockLoan]
 
 
 class MockFamilyOverview:
-    def __init__(self, accounts: List[MockAccount]):
+    def __init__(self, accounts: list[MockAccount]):
         self.accounts = accounts
 
     @property
-    def loans(self) -> List[MockLoan]:
+    def loans(self) -> list[MockLoan]:
         all_loans = []
         for acc in self.accounts:
             all_loans.extend(acc.loans)
         return all_loans
 
-    def plan_library_trips(self) -> List[MockLibraryTrip]:
+    def plan_library_trips(self) -> list[MockLibraryTrip]:
         trips = {}
         for loan in self.loans:
             if loan.library not in trips:

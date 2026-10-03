@@ -8,7 +8,6 @@ Ce service implémente le pattern 'Stateless Compute, Stateful Session' :
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 class SessionStore:
     """Stockage résilient des cookies de session Syracuse (GCS / Local)."""
 
-    def __init__(self, bucket_name: Optional[str] = None, local_file_path: str = ".session_cache.json"):
+    def __init__(self, bucket_name: str | None = None, local_file_path: str = ".session_cache.json"):
         self.bucket_name = bucket_name
         self.local_file_path = Path(local_file_path)
         self._gcs_client = None
@@ -35,7 +34,7 @@ class SessionStore:
                 )
                 self._gcs_available = False
 
-    def load_session(self) -> Optional[Dict[str, str]]:
+    def load_session(self) -> dict[str, str] | None:
         """Charge les cookies de session depuis GCS ou le cache local."""
         # 1. Tentative via GCS
         if self._gcs_available and self._gcs_client and self.bucket_name:
@@ -62,7 +61,7 @@ class SessionStore:
 
         return None
 
-    def save_session(self, cookies: Dict[str, str]) -> bool:
+    def save_session(self, cookies: dict[str, str]) -> bool:
         """Sauvegarde les cookies de session sur GCS et/ou en local."""
         payload = json.dumps(cookies, ensure_ascii=False, indent=2)
         saved = False

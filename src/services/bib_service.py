@@ -5,9 +5,9 @@ avec gestion automatique du cache de session et reconnexion transparente.
 """
 
 import asyncio
-import logging
-from typing import Any, Dict, List, Optional
 from datetime import date
+import logging
+from typing import Any
 
 from src.config import Settings, get_settings
 from src.services.session_store import SessionStore
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class BibService:
     """Service d'orchestration pour le portail Syracuse des Bibliothèques de Paris."""
 
-    def __init__(self, settings: Optional[Settings] = None, session_store: Optional[SessionStore] = None):
+    def __init__(self, settings: Settings | None = None, session_store: SessionStore | None = None):
         self.settings = settings or get_settings()
         self.session_store = session_store or SessionStore(
             bucket_name=self.settings.gcs_bucket_name,
@@ -72,10 +72,10 @@ class BibService:
 
     async def get_loans(
         self,
-        user_name: Optional[str] = None,
-        branch_name: Optional[str] = None,
-        due_within_days: Optional[int] = None,
-    ) -> List[Any]:
+        user_name: str | None = None,
+        branch_name: str | None = None,
+        due_within_days: int | None = None,
+    ) -> list[Any]:
         """Récupère et filtre la liste des emprunts multi-cartes."""
         family = await self.get_family_overview()
         loans = family.loans
@@ -104,7 +104,7 @@ class BibService:
         # Tri chronologique par date d'échéance
         return sorted(loans, key=lambda x: x.due_date or date.max)
 
-    async def get_family_members(self) -> List[str]:
+    async def get_family_members(self) -> list[str]:
         """Retourne les noms de toutes les personnes associées au compte."""
         family = await self.get_family_overview()
         members = []
@@ -113,7 +113,7 @@ class BibService:
                 members.append(account.account_name)
         return members
 
-    def _sync_renew_single_loan(self, loan_id: str) -> Dict[str, Any]:
+    def _sync_renew_single_loan(self, loan_id: str) -> dict[str, Any]:
         """Prolonge un prêt spécifique de manière synchrone."""
         from parisbibpy.exceptions import AuthenticationError
 
@@ -167,11 +167,11 @@ class BibService:
             self.session_store.clear_session()
             return _execute_renewal(use_cache=False)
 
-    async def renew_single_loan(self, loan_id: str) -> Dict[str, Any]:
+    async def renew_single_loan(self, loan_id: str) -> dict[str, Any]:
         """Prolonge un prêt spécifique (asynchrone)."""
         return await asyncio.to_thread(self._sync_renew_single_loan, loan_id)
 
-    def _sync_renew_all_expiring(self, due_within_days: int = 3) -> Dict[str, Any]:
+    def _sync_renew_all_expiring(self, due_within_days: int = 3) -> dict[str, Any]:
         """Prolonge en masse les prêts expirant bientôt."""
         from parisbibpy.exceptions import AuthenticationError
 
@@ -203,11 +203,11 @@ class BibService:
             self.session_store.clear_session()
             return _execute_batch(use_cache=False)
 
-    async def renew_all_expiring_loans(self, due_within_days: int = 3) -> Dict[str, Any]:
+    async def renew_all_expiring_loans(self, due_within_days: int = 3) -> dict[str, Any]:
         """Prolonge tous les prêts de la famille arrivant à échéance (asynchrone)."""
         return await asyncio.to_thread(self._sync_renew_all_expiring, due_within_days)
 
-    async def get_trip_planner(self, branch_filter: Optional[str] = None) -> List[Any]:
+    async def get_trip_planner(self, branch_filter: str | None = None) -> list[Any]:
         """Retourne la liste des bibliothèques ordonnées par urgence de retour (Trip Planner)."""
         family = await self.get_family_overview()
         trips = family.plan_library_trips()
@@ -218,7 +218,7 @@ class BibService:
 
         return trips
 
-    async def get_book_covers(self, loan_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    async def get_book_covers(self, loan_ids: list[str] | None = None) -> list[dict[str, Any]]:
         """Récupère les informations visuelles (couvertures) des livres empruntés."""
         family = await self.get_family_overview()
         results = []

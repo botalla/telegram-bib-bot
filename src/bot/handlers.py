@@ -5,7 +5,7 @@ les clics de boutons interactifs (CallbackQuery) et le dialogue libre via Gemini
 """
 
 import logging
-from typing import Optional
+
 from telegram import InputMediaPhoto, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.ext import ContextTypes
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class BotHandlers:
     """Regroupe l'ensemble des gestionnaires de commandes et messages."""
 
-    def __init__(self, bib_service: Optional[BibService] = None, gemini_agent: Optional[GeminiAgent] = None):
+    def __init__(self, bib_service: BibService | None = None, gemini_agent: GeminiAgent | None = None):
         self.bib_service = bib_service or BibService()
         self.gemini_agent = gemini_agent or GeminiAgent(bib_service=self.bib_service)
 

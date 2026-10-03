@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Script CLI d'administration et configuration du Webhook Telegram.
 
 Permet d'enregistrer, d'inspecter ou de supprimer l'URL de Webhook Telegram.
@@ -13,21 +12,19 @@ import argparse
 import json
 import os
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 
 
 def get_bot_token() -> str:
     """Récupère le jeton Telegram depuis l'environnement ou les arguments."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-    if not token:
-        # Essai de lecture dans le fichier .env local
-        if os.path.exists(".env"):
-            with open(".env", "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("TELEGRAM_BOT_TOKEN="):
-                        token = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        break
+    if not token and os.path.exists(".env"):
+        with open(".env", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("TELEGRAM_BOT_TOKEN="):
+                    token = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
     if not token:
         print("❌ Erreur : Variable TELEGRAM_BOT_TOKEN non trouvée (définissez-la ou fournissez un fichier .env).")
         sys.exit(1)
@@ -49,9 +46,9 @@ def make_telegram_request(token: str, method: str, payload: dict | None = None) 
         err_msg = e.read().decode("utf-8")
         try:
             return json.loads(err_msg)
-        except Exception:
+        except json.JSONDecodeError:
             return {"ok": False, "description": err_msg}
-    except Exception as e:
+    except (urllib.error.URLError, OSError) as e:
         return {"ok": False, "description": str(e)}
 
 

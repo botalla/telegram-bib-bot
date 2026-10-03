@@ -4,9 +4,10 @@ Expose l'écouteur HTTP asynchrone pour les updates Telegram avec vérification
 du jeton de sécurité X-Telegram-Bot-Api-Secret-Token, et probe de santé /healthz.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 import logging
-from typing import AsyncGenerator
+
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from telegram import Update
 
@@ -67,13 +68,14 @@ async def telegram_webhook(
     """Endpoint de réception des événements Telegram Webhook."""
     # 1. Vérification du jeton secret Webhook
     expected_secret = settings.telegram_webhook_secret
-    if expected_secret:
-        if not x_telegram_bot_api_secret_token or x_telegram_bot_api_secret_token != expected_secret:
-            logger.warning("⛔ Rejet Webhook : Secret token absent ou invalide.")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Secret token mismatch",
-            )
+    if expected_secret and (
+        not x_telegram_bot_api_secret_token or x_telegram_bot_api_secret_token != expected_secret
+    ):
+        logger.warning("⛔ Rejet Webhook : Secret token absent ou invalide.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Secret token mismatch",
+        )
 
     # 2. Lecture et désérialisation de l'Update Telegram
     try:
@@ -83,7 +85,7 @@ async def telegram_webhook(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid JSON payload",
-        )
+        ) from e
 
     # 3. Traitement asynchrone par python-telegram-bot
     try:
@@ -91,7 +93,7 @@ async def telegram_webhook(
         if update:
             await ptb_app.process_update(update)
     except Exception as e:
-        logger.error(f"Erreur lors du traitement de l'update Telegram : {e}", exc_info=True)
+        logger.exception(f"Erreur lors du traitement de l'update Telegram : {e}")
 
     # Telegram attend un statut HTTP 200 immédiat pour confirmer la bonne réception
     return Response(status_code=status.HTTP_200_OK)

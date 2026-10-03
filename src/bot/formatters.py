@@ -4,9 +4,9 @@ Gère les codes couleurs émojis (🔴/🟠/🟢), la mise en page des listes d'
 et les récapitulatifs du Trip Planner pour smartphone.
 """
 
-import html
 from datetime import date
-from typing import Any, List, Optional
+import html
+from typing import Any
 
 
 def escape(text: Any) -> str:
@@ -16,7 +16,7 @@ def escape(text: Any) -> str:
     return html.escape(str(text))
 
 
-def get_due_badge(due_date: Optional[date]) -> str:
+def get_due_badge(due_date: date | None) -> str:
     """Renvoie un badge visuel et le libellé relatif de l'échéance."""
     if not due_date:
         return "⚪ Date inconnue"
@@ -38,7 +38,7 @@ def get_due_badge(due_date: Optional[date]) -> str:
         return f"🟢 Dans {delta} jours ({due_date.strftime('%d/%m/%Y')})"
 
 
-def format_loan_item(loan: Any, index: Optional[int] = None) -> str:
+def format_loan_item(loan: Any, index: int | None = None) -> str:
     """Formate un prêt individuel avec ses métadonnées."""
     prefix = f"{index}. " if index else "• "
     title = escape(getattr(loan, "title", "Ouvrage sans titre"))
@@ -59,7 +59,7 @@ def format_loan_item(loan: Any, index: Optional[int] = None) -> str:
     )
 
 
-def format_loans_list(loans: List[Any], header_title: str = "Emprunts en cours") -> str:
+def format_loans_list(loans: list[Any], header_title: str = "Emprunts en cours") -> str:
     """Formate une liste complète d'emprunts."""
     if not loans:
         return f"📚 <b>{escape(header_title)}</b>\n\nAucun livre emprunté actuellement ! 🎉"
@@ -73,7 +73,7 @@ def format_loans_list(loans: List[Any], header_title: str = "Emprunts en cours")
     return "\n".join(msg)
 
 
-def format_trip_planner(trips: List[Any]) -> str:
+def format_trip_planner(trips: list[Any]) -> str:
     """Formate la liste ordonnée par bibliothèque pour préparer le sac de retours."""
     if not trips:
         return "🎒 <b>Planificateur de retours (Trip Planner)</b>\n\nAucun retour de livre nécessaire pour l'instant ! 🎉"

@@ -1,7 +1,8 @@
 """Tests unitaires pour les schémas d'outils et l'agent Gemini."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.ai.gemini_agent import GeminiAgent
 from src.ai.tools_schema import GEMINI_TOOLS_DECLARATIONS
