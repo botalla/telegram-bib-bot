@@ -6,7 +6,7 @@ et des secrets injectés par GCP Secret Manager ou un fichier .env local.
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +53,20 @@ class Settings(BaseSettings):
         default="",
         description="Mot de passe ou code PIN du compte Syracuse",
     )
+
+    @field_validator(
+        "telegram_bot_token",
+        "telegram_webhook_secret",
+        "gemini_api_key",
+        "parisbib_username",
+        "parisbib_password",
+        "allowed_user_ids",
+        mode="after",
+    )
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        """Supprime les espaces, retours chariot (\r, \n) involontairement injectés."""
+        return v.strip() if isinstance(v, str) else v
 
     # Persistance de Session
     gcs_bucket_name: str | None = Field(
