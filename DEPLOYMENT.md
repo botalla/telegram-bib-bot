@@ -269,9 +269,19 @@ echo "WIF_SERVICE_ACCOUNT: $GH_SA_EMAIL"
 
 ---
 
-### 2.7 Script d'Automatisation Global (`setup_infra.sh`)
+### 2.7 Scripts d'Automatisation Globale de l'Infrastructure
 
-Pour exécuter toutes les étapes précédentes en une seule commande, placez le script suivant dans `scripts/setup_infra.sh` :
+Deux scripts clé-en-main sont disponibles à la racine de `scripts/` selon votre environnement (PowerShell sur Windows ou Bash sur Linux/macOS) :
+
+#### Sur Windows (PowerShell) :
+```powershell
+.\scripts\setup_infra.ps1 -ProjectId "biblio-bot-paris-9730" -GitHubRepo "botalla/telegram-bib-bot" -Region "europe-west9"
+```
+
+#### Sur Linux / macOS (Bash) :
+```bash
+./scripts/setup_infra.sh biblio-bot-paris-9730 botalla/telegram-bib-bot europe-west9
+```
 
 ```bash
 #!/usr/bin/env bash
