@@ -30,16 +30,22 @@ ptb_app = build_application(settings=settings)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Gestionnaire de cycle de vie du serveur FastAPI et du bot Telegram."""
     logger.info("🚀 Démarrage du conteneur BiblioBot...")
-    await ptb_app.initialize()
-    await ptb_app.start()
-    logger.info("✅ Application Telegram initialisée avec succès.")
+    try:
+        await ptb_app.initialize()
+        await ptb_app.start()
+        logger.info("✅ Application Telegram initialisée avec succès.")
+    except Exception as e:
+        logger.error(f"⚠️ Erreur lors de l'initialisation Telegram (vérifiez le token) : {e}")
 
     yield
 
     logger.info("🛑 Arrêt de l'application BiblioBot...")
-    await ptb_app.stop()
-    await ptb_app.shutdown()
-    logger.info("👋 Application fermée proprement.")
+    try:
+        await ptb_app.stop()
+        await ptb_app.shutdown()
+        logger.info("👋 Application fermée proprement.")
+    except Exception as e:
+        logger.error(f"Erreur lors de l'arrêt de Telegram : {e}")
 
 
 app = FastAPI(
