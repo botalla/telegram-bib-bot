@@ -1,0 +1,141 @@
+name: CI/CD Build & Deploy Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  SERVICE_NAME: biblio-bot
+  REPOSITORY_NAME: biblio-bot-repo
+  APP_SA_NAME: biblio-bot-sa
+
+jobs:
+  # ==========================================================================
+  # Étape 1 : Tests & Qualité de code
+  # ==========================================================================
+  test:
+    name: 🧪 Tests & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Configuration de Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Installation des dépendances
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install ruff pytest pytest-asyncio httpx
+
+      - name: Linting avec Ruff
+        run: |
+          ruff check .
+
+      - name: Exécution des tests unitaires
+        run: |
+          pytest -v tests/
+
+  # ==========================================================================
+  # Étape 2 : Build Docker & Déploiement Cloud Run
+  # ==========================================================================
+  deploy:
+    name: 🚀 Build Docker & Deploy Cloud Run
+    needs: [test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Indispensable pour l'authentification WIF
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      # 1. Authentification Google Cloud via Workload Identity Federation
+      - name: Authentification Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      # 2. Configuration du CLI gcloud et de Docker
+      - name: Configuration de Docker pour Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      # 3. Construction et Tag de l'Image Docker
+      - name: Build & Push de l'image Docker
+        id: docker-build
+        env:
+          IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          IMAGE_LATEST: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/${{ env.SERVICE_NAME }}:latest
+        run: |
+          docker build \
+            --tag "$IMAGE_URI" \
+            --tag "$IMAGE_LATEST" \
+            -f Dockerfile .
+          
+          docker push "$IMAGE_URI"
+          docker push "$IMAGE_LATEST"
+          echo "IMAGE=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      # 4. Déploiement sur Cloud Run
+      - name: Déploiement sur Google Cloud Run
+        id: deploy-cloud-run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ vars.GCP_REGION }}
+          image: ${{ steps.docker-build.outputs.IMAGE }}
+          service_account: ${{ env.APP_SA_NAME }}@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          flags: |
+            --platform=managed
+            --allow-unauthenticated
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=2
+            --timeout=60s
+            --concurrency=80
+            --set-env-vars=GCS_BUCKET_NAME=${{ vars.GCS_BUCKET_NAME }},ALLOWED_USER_IDS=${{ vars.ALLOWED_USER_IDS }},LOG_LEVEL=INFO
+            --set-secrets=TELEGRAM_BOT_TOKEN=TELEGRAM_BOT_TOKEN:latest,TELEGRAM_WEBHOOK_SECRET=TELEGRAM_WEBHOOK_SECRET:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,PARISBIB_USERNAME=PARISBIB_USERNAME:latest,PARISBIB_PASSWORD=PARISBIB_PASSWORD:latest
+
+      # 5. Enregistrement automatique du Webhook Telegram
+      - name: Synchronisation du Webhook Telegram
+        env:
+          SERVICE_URL: ${{ steps.deploy-cloud-run.outputs.url }}
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: |
+          echo "Configuration du webhook sur l'URL Cloud Run : ${SERVICE_URL}/webhook"
+          
+          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"url\": \"${SERVICE_URL}/webhook\",
+              \"secret_token\": \"${WEBHOOK_SECRET}\",
+              \"drop_pending_updates\": false,
+              \"allowed_updates\": [\"message\", \"callback_query\"]
+            }")
+          
+          echo "Réponse Telegram API : $RESPONSE"
+          
+          # Vérification du succès
+          if echo "$RESPONSE" | grep -q '"ok":true'; then
+            echo "✅ Webhook Telegram synchronisé avec succès !"
+          else
+            echo "❌ Erreur lors de la configuration du Webhook Telegram."
+            exit 1
+          fi

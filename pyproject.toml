@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telegram-bib-bot"
+version = "0.1.0"
+description = "Assistant conversationnel Telegram pour les bibliothèques de la Ville de Paris"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Botalla" }
+]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "python-telegram-bot[webhooks]>=21.0",
+    "google-genai>=0.1.1",
+    "google-cloud-storage>=2.14.0",
+    "google-cloud-secret-manager>=2.18.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "httpx>=0.27.0",
+    "pillow>=10.2.0",
+    "parisbibpy @ git+https://github.com/botalla/parisbibpy.git",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.3.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

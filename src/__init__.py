@@ -1,0 +1,1 @@
+"""BiblioBot Paris - Package principal."""
