@@ -31,10 +31,6 @@ flowchart TD
             SM["🔐 Secret Manager\n- Bot Token Telegram\n- Clé API Gemini\n- Identifiants Syracuse"]
             GCS["🪣 Cloud Storage (GCS)\n- Cache cookies de session Syracuse\n- Cache métadonnées couvertures"]
         end
-
-        subgraph "Automatisation"
-            CS["⏰ Cloud Scheduler\n- Cron quotidien 08:30 (Rappels push)"]
-        end
     end
 
     subgraph "Services Externes"
@@ -44,7 +40,6 @@ flowchart TD
 
     TelApp <-->|HTTPS| TelAPI
     TelAPI -->|POST /webhook\n(Header secret_token)| CR
-    CS -->|POST /cron/daily-check\n(OIDC Auth)| CR
     CR -->|Chargement des secrets| SM
     CR <-->|Lecture / Sauvegarde sessions| GCS
     CR <-->|Function Calling (JSON)| Gemini
@@ -60,7 +55,7 @@ flowchart TD
 ### 2.1 Moteur Webhook & Bot Framework : `python-telegram-bot` v21+ & `FastAPI`
 - **Choix du mode Webhook** : Contrairement au polling (`getUpdates`) qui nécessite un conteneur allumé en continu, le mode Webhook permet à Cloud Run d'être invoqué uniquement à l'arrivée d'un message (`scale to zero` si inactif).
 - **Framework** :
-  - **`FastAPI`** : Micro-serveur ASGI ultra-léger servant d'écouteur HTTP pour Telegram (`/webhook`) et pour les tâches planifiées (`/cron/daily-check`).
+  - **`FastAPI`** : Micro-serveur ASGI ultra-léger servant d'écouteur HTTP pour le Webhook Telegram (`POST /webhook`).
   - **`python-telegram-bot` v21+ (asyncio)** : Prise en charge des types Telegram (Keyboards, MediaGroups, Parse Modes), routage des commandes, et gestion fluide des callbacks de boutons.
 
 ### 2.2 Orchestration IA : Google Gemini avec Function Calling
@@ -107,10 +102,8 @@ Le portail Syracuse de la Ville de Paris repose sur des cookies de session. Pour
 
 ---
 
-### 2.4 Notifications Proactives (Push) via Cloud Scheduler
-- Un déclencheur **Cloud Scheduler** est configuré avec l'expression cron : `30 8 * * *` (08h30 chaque matin, fuseau `Europe/Paris`).
-- Il émet une requête HTTP `POST` sécurisée par un jeton **OIDC** vers l'endpoint `/cron/daily-check` de Cloud Run.
-- Le service vérifie les prêts : si des livres expirent à J, J+1 ou J+2, une notification Telegram prioritaire est envoyée directement dans le chat de la famille.
+### 2.4 Périmètre d'Exécution : Service Purement Réactif (On-Demand)
+Le bot fonctionne en mode **100% réactif à la demande** (Pull / conversationnel). Les alertes proactives matinales et tâches planifiées récurrentes sont assurées par un projet autonome externe distinct, garantissant un découplage total et une responsabilité unique pour ce micro-service.
 
 ---
 
@@ -150,7 +143,7 @@ telegram-bib-bot/
 ├── pyproject.toml / requirements.txt
 ├── scripts/
 │   ├── set_webhook.py           # Script d'enregistrement du Webhook Telegram
-│   └── deploy_gcp.sh            # Script de déploiement Cloud Run & Scheduler
+│   └── deploy_gcp.sh            # Script de déploiement Cloud Run
 ├── src/
 │   ├── __init__.py
 │   ├── config.py                # Configuration typée (Pydantic / Dataclass)
@@ -158,21 +151,17 @@ telegram-bib-bot/
 │   ├── bot/
 │   │   ├── __init__.py
 │   │   ├── dispatcher.py        # Routeur des messages et callbacks Telegram
-│   │   ├── handlers.py          # Gestionnaires des commandes (/start, /emprunts)
+│   │   ├── handlers.py          # Gestionnaires des commandes (/start, /emprunts, /membre)
 │   │   ├── keyboards.py         # Générateurs des claviers Inline interactifs
 │   │   └── formatters.py        # Mise en forme HTML Telegram (badges, listes)
 │   ├── ai/
 │   │   ├── __init__.py
 │   │   ├── gemini_agent.py      # Client Gemini 2.5 Flash avec Function Calling
 │   │   └── tools_schema.py      # Schémas OpenAPI / Pydantic des fonctions exposées
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── bib_service.py       # Wrapper métier autour de parisbibpy
-│   │   ├── session_store.py     # Gestionnaire de persistance des cookies (GCS/Local)
-│   │   └── notifier.py          # Moteur des alertes quotidiennes proactives
-│   └── cron/
+│   └── services/
 │       ├── __init__.py
-│       └── daily_checker.py     # Tâche planifiée matinale
+│       ├── bib_service.py       # Wrapper métier autour de parisbibpy
+│       └── session_store.py     # Gestionnaire de persistance des cookies (GCS/Local)
 └── tests/
     ├── test_gemini_tools.py
     └── test_bib_service.py
@@ -186,7 +175,6 @@ telegram-bib-bot/
 - **Cloud Run** : 1 service conteneurisé (512 MiB RAM, 1 vCPU, min-instances: 0, max-instances: 2).
 - **Google Cloud Storage (GCS)** : 1 bucket privé (`<project-id>-bibbot-state`) pour la persistance des sessions.
 - **Secret Manager** : 5 secrets gérés avec chiffrement automatique.
-- **Cloud Scheduler** : 1 job HTTP périodique.
 
 ### 5.2 Commande de Déploiement Type (`gcloud`)
 ```bash
@@ -211,21 +199,12 @@ curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
        "secret_token": "<VOTRE_WEBHOOK_SECRET>",
        "drop_pending_updates": true
      }'
-
-# 3. Création du déclencheur Cloud Scheduler pour les alertes du matin
-gcloud scheduler jobs create http biblio-bot-daily-reminder \
-    --location europe-west9 \
-    --schedule "30 8 * * *" \
-    --time-zone "Europe/Paris" \
-    --uri "https://biblio-bot-xxxxxx.a.run.app/cron/daily-check" \
-    --http-method POST \
-    --oidc-service-account-email "cloud-run-invoker@<PROJECT_ID>.iam.gserviceaccount.com"
 ```
 
 ---
 
 ## 6. Synthèse des Points Forts de l'Architecture
 
-1. **Économique ($0.00)** : Aucune machine virtuelle allumée H24. Le serveur ne s'éveille que lorsqu'un message Telegram arrive ou lors du cron du matin.
+1. **Économique ($0.00)** : Aucune machine virtuelle allumée H24. Le serveur ne s'éveille que lorsqu'un message Telegram arrive (scale-to-zero intégral).
 2. **Performant** : Moins de 2s grâce au maintien de la session Syracuse sur GCS et à la rapidité de Gemini 2.5 Flash.
 3. **Extensible** : L'ajout de nouvelles fonctionnalités (réservation d'ouvrages, recherche dans le catalogue de la Ville de Paris) se fait simplement en ajoutant une fonction Python et sa déclaration Tool à Gemini.

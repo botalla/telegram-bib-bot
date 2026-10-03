@@ -34,13 +34,12 @@ flowchart TD
     User([👤 Utilisateur Telegram]) -->|Message texte / Commande / Bouton| Bot[🤖 BiblioBot Telegram]
     
     subgraph "Cas d'Usage Principaux"
-        Bot --> UC1["UC-01 : Consultation par membre (ex: Camille)"]
+        Bot --> UC1["UC-01 : Consultation par membre (ex: Camille, Félicie)"]
         Bot --> UC2["UC-02 : Consultation par bibliothèque & urgence"]
         Bot --> UC3["UC-03 : Prolongation ciblée (1 livre)"]
         Bot --> UC4["UC-04 : Prolongation en masse (échéance < X jours)"]
         Bot --> UC5["UC-05 : Affichage visuel des couvertures"]
         Bot --> UC6["UC-06 : Questions libres en langage naturel"]
-        Bot --> UC7["UC-07 : Notification quotidienne proactive (Push)"]
     end
     
     UC1 & UC2 & UC3 & UC4 & UC5 & UC6 --> Gemini["🧠 Gemini 2.5 (Function Calling)"]
@@ -181,28 +180,8 @@ flowchart TD
 
 ---
 
-### UC-07 : Notification quotidienne proactive (Rappel Push matinal)
-
-- **Intention** : Le bot prévient activement l'utilisateur avant qu'une pénalité de retard ne soit appliquée, sans que l'utilisateur ait besoin d'y penser.
-- **Déclencheur** : Cron quotidien déclenché par **Cloud Scheduler** (ex: tous les matins à 08h30 Europe/Paris).
-- **Flux d'exécution** :
-  1. Cloud Scheduler envoie une impulsion au service Cloud Run.
-  2. Le bot inspecte tous les emprunts actifs de la famille.
-  3. Si aucun livre n'arrive à échéance dans les 3 jours : **silence radio** (pas de spam inutile).
-  4. Si des livres arrivent à échéance (J-2, J-1, Jour J ou en retard) : génération d'un récapitulatif synthétique avec boutons de prolongation immédiate 1-clic.
-- **Exemple de rendu Telegram** :
-  ```text
-  🔔 Rappel Bibliothèque — 2 livres arrivent à échéance !
-
-  ⚠️ À rendre demain (04/10) :
-  • "Histoire de Paris" (Jean) — Médiathèque Marguerite Duras
-
-  🔴 À rendre aujourd'hui (03/10) :
-  • "Mortelle Adèle T12" (Camille) — Médiathèque Marguerite Duras
-
-  Prolongez-les maintenant si vous ne pouvez pas les déposer aujourd'hui :
-  ```
-  `[🔄 Tout prolonger]` `[🎒 Préparer le sac de retour]`
+> [!NOTE]
+> **Rappels quotidiens programmés** : Les alertes et notifications proactives du matin sont couvertes par un service autonome dédié (ex: agent planifié indépendant). Ce bot Telegram se concentre sur l'interaction interactive à la demande (Pull).
 
 ---
 
