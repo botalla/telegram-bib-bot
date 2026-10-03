@@ -64,14 +64,14 @@ class GeminiAgent:
                 )
                 return [
                     {
-                        "holding_id": str(getattr(l, "holding_id", "") or getattr(l, "barcode", "")),
-                        "title": l.title,
-                        "account_name": l.account_name,
-                        "library": l.library,
-                        "due_date": str(l.due_date) if l.due_date else None,
-                        "is_renewable": getattr(l, "is_renewable", False),
+                        "holding_id": str(getattr(loan, "holding_id", "") or getattr(loan, "barcode", "")),
+                        "title": loan.title,
+                        "account_name": loan.account_name,
+                        "library": loan.library,
+                        "due_date": str(loan.due_date) if loan.due_date else None,
+                        "is_renewable": getattr(loan, "is_renewable", False),
                     }
-                    for l in loans
+                    for loan in loans
                 ]
 
             elif name == "renew_single_loan":

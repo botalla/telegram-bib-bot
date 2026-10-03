@@ -4,8 +4,8 @@ Gère les codes couleurs émojis (🔴/🟠/🟢), la mise en page des listes d'
 et les récapitulatifs du Trip Planner pour smartphone.
 """
 
-from datetime import date
 import html
+from datetime import date
 from typing import Any
 
 

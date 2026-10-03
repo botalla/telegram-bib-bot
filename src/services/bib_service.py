@@ -5,8 +5,8 @@ avec gestion automatique du cache de session et reconnexion transparente.
 """
 
 import asyncio
-from datetime import date
 import logging
+from datetime import date
 from typing import Any
 
 from src.config import Settings, get_settings

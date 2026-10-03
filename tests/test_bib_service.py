@@ -19,12 +19,12 @@ async def test_get_loans_filtering(mock_settings, mock_family_data):
         # 2. Filtrer par membre (Camille)
         camille_loans = await service.get_loans(user_name="Camille")
         assert len(camille_loans) == 2
-        assert all(l.account_name == "Camille" for l in camille_loans)
+        assert all(loan.account_name == "Camille" for loan in camille_loans)
 
         # 3. Filtrer par bibliothèque (Duras)
         duras_loans = await service.get_loans(branch_name="Duras")
         assert len(duras_loans) == 2
-        assert all("Duras" in l.library for l in duras_loans)
+        assert all("Duras" in loan.library for loan in duras_loans)
 
         # 4. Filtrer par urgence (échéance sous 2 jours)
         urgent_loans = await service.get_loans(due_within_days=2)

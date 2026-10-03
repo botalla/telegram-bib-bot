@@ -57,7 +57,7 @@ class MockFamilyOverview:
 
         res = []
         for lib, l_list in trips.items():
-            earliest = min((l.due_date for l in l_list), default=date.today())
+            earliest = min((loan_item.due_date for loan_item in l_list), default=date.today())
             res.append(
                 MockLibraryTrip(
                     library=lib,

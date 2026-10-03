@@ -4,9 +4,9 @@ Expose l'écouteur HTTP asynchrone pour les updates Telegram avec vérification
 du jeton de sécurité X-Telegram-Bot-Api-Secret-Token, et probe de santé /healthz.
 """
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-import logging
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from telegram import Update
