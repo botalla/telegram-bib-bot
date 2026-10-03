@@ -16,6 +16,7 @@ from src.bot.formatters import (
     format_batch_renewal_report,
     format_loans_list,
     format_trip_planner,
+    split_message,
 )
 from src.bot.keyboards import (
     get_back_to_menu_keyboard,
@@ -34,6 +35,55 @@ class BotHandlers:
         self.bib_service = bib_service or BibService()
         self.gemini_agent = gemini_agent or GeminiAgent(bib_service=self.bib_service)
 
+    async def _send_or_edit(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        text: str,
+        reply_markup=None,
+    ) -> None:
+        """Envoie ou modifie un message en découpant automatiquement si la taille dépasse 4096 caractères."""
+        chunks = split_message(text, max_length=3900)
+        chat_id = update.effective_chat.id if update.effective_chat else None
+
+        if update.callback_query and update.callback_query.message:
+            first_markup = reply_markup if len(chunks) == 1 else None
+            try:
+                await update.callback_query.edit_message_text(
+                    chunks[0],
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=first_markup,
+                )
+            except Exception:
+                if chat_id:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=chunks[0],
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=first_markup,
+                    )
+
+            # Envoyer les blocs suivants en nouveaux messages si nécessaire
+            for i in range(1, len(chunks)):
+                is_last = (i == len(chunks) - 1)
+                chunk_markup = reply_markup if is_last else None
+                if chat_id:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=chunks[i],
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=chunk_markup,
+                    )
+        elif update.message:
+            for i, chunk in enumerate(chunks):
+                is_last = (i == len(chunks) - 1)
+                chunk_markup = reply_markup if is_last else None
+                await update.message.reply_text(
+                    chunk,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=chunk_markup,
+                )
+
     async def start_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /start : Accueil et menu principal."""
         user = update.effective_user
@@ -46,12 +96,7 @@ class BotHandlers:
             "💬 <i>Vous pouvez m'écrire naturellement (ex: 'Qu'est-ce qu'on doit rendre ?', 'Prolonge les livres de Camille') "
             "ou utiliser les raccourcis ci-dessous :</i>"
         )
-
-        keyboard = get_main_menu_keyboard()
-        if update.message:
-            await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(welcome_text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        await self._send_or_edit(update, context, welcome_text, reply_markup=get_main_menu_keyboard())
 
     async def emprunts_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /emprunts : Liste complète des prêts."""
@@ -61,12 +106,7 @@ class BotHandlers:
 
         loans = await self.bib_service.get_loans()
         text = format_loans_list(loans, header_title="Tous les emprunts de la famille")
-        keyboard = get_back_to_menu_keyboard()
-
-        if update.message:
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        await self._send_or_edit(update, context, text, reply_markup=get_back_to_menu_keyboard())
 
     async def urgences_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /urgences : Livres à rendre dans les 48 heures."""
@@ -76,12 +116,7 @@ class BotHandlers:
 
         loans = await self.bib_service.get_loans(due_within_days=2)
         text = format_loans_list(loans, header_title="🔴 Emprunts urgents (retour sous 48h)")
-        keyboard = get_back_to_menu_keyboard()
-
-        if update.message:
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        await self._send_or_edit(update, context, text, reply_markup=get_back_to_menu_keyboard())
 
     async def membre_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /membre [nom] : Emprunts d'un titulaire spécifique."""
@@ -89,7 +124,6 @@ class BotHandlers:
         if chat_id:
             await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
-        # Si le nom est passé en argument de la commande
         args = context.args if context.args else []
         member_name = " ".join(args).strip() if args else None
 
@@ -97,13 +131,7 @@ class BotHandlers:
             loans = await self.bib_service.get_loans(user_name=member_name)
             text = format_loans_list(loans, header_title=f"Emprunts de {member_name}")
             keyboard = get_back_to_menu_keyboard()
-
-            if update.message:
-                await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-            elif update.callback_query:
-                await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
         else:
-            # Afficher les boutons avec la liste des membres disponibles
             members = await self.bib_service.get_family_members()
             if not members:
                 text = "ℹ️ Aucun membre n'a pu être détecté automatiquement sur votre compte."
@@ -112,10 +140,7 @@ class BotHandlers:
                 text = "👨‍👩‍👧 <b>Choisissez un membre de la famille :</b>"
                 keyboard = get_members_keyboard(members)
 
-            if update.message:
-                await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-            elif update.callback_query:
-                await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        await self._send_or_edit(update, context, text, reply_markup=keyboard)
 
     async def trip_planner_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Organise les retours par bibliothèque."""
@@ -125,12 +150,7 @@ class BotHandlers:
 
         trips = await self.bib_service.get_trip_planner()
         text = format_trip_planner(trips)
-        keyboard = get_back_to_menu_keyboard()
-
-        if update.message:
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        await self._send_or_edit(update, context, text, reply_markup=get_back_to_menu_keyboard())
 
     async def batch_renew_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /prolonger : Prolonge les emprunts qui arrivent à échéance."""
@@ -140,12 +160,7 @@ class BotHandlers:
 
         report = await self.bib_service.renew_all_expiring_loans(due_within_days=3)
         text = format_batch_renewal_report(report)
-        keyboard = get_back_to_menu_keyboard()
-
-        if update.message:
-            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        await self._send_or_edit(update, context, text, reply_markup=get_back_to_menu_keyboard())
 
     async def covers_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /couvertures : Affiche un album photo des couvertures."""
@@ -200,11 +215,7 @@ class BotHandlers:
             "<i>• 'Combien de livres on a en tout ?'</i>\n"
             "<i>• 'Je prépare mon sac pour Václav Havel'</i>"
         )
-        keyboard = get_back_to_menu_keyboard()
-        if update.message:
-            await update.message.reply_text(help_text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(help_text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        await self._send_or_edit(update, context, help_text, reply_markup=get_back_to_menu_keyboard())
 
     async def text_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Gestionnaire des messages en langage naturel délégués à Gemini."""
@@ -217,14 +228,9 @@ class BotHandlers:
         if chat_id:
             await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
-        # Délégation à l'agent Gemini
         response = await self.gemini_agent.chat(user_text)
         reply_text = response.get("text", "Désolé, je n'ai pas pu traiter votre demande.")
-
-        await update.message.reply_text(
-            reply_text,
-            reply_markup=get_back_to_menu_keyboard(),
-        )
+        await self._send_or_edit(update, context, reply_text, reply_markup=get_back_to_menu_keyboard())
 
     async def callback_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Routeur des clics sur les boutons interactifs."""
@@ -257,8 +263,9 @@ class BotHandlers:
             loan_id = data.split(":", 2)[2]
             res = await self.bib_service.renew_single_loan(loan_id=loan_id)
             status_text = res.get("message", "Opération terminée.")
-            await query.edit_message_text(
+            await self._send_or_edit(
+                update,
+                context,
                 f"🔄 <b>Résultat :</b>\n\n{escape(status_text)}",
-                parse_mode=ParseMode.HTML,
                 reply_markup=get_back_to_menu_keyboard(),
             )

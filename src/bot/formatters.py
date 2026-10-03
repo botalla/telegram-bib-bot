@@ -126,3 +126,34 @@ def format_batch_renewal_report(report_data: dict) -> str:
         msg.append("ℹ️ Aucun livre n'était éligible à la prolongation.")
 
     return "\n".join(msg)
+
+
+def split_message(text: str, max_length: int = 3900) -> list[str]:
+    """Découpe un texte long en blocs respectant la limite de caractères de Telegram (4096)."""
+    if len(text) <= max_length:
+        return [text]
+
+    chunks = []
+    lines = text.split("\n")
+    current_chunk: list[str] = []
+    current_len = 0
+
+    for line in lines:
+        line_len = len(line) + 1
+        if current_len + line_len > max_length:
+            if current_chunk:
+                chunks.append("\n".join(current_chunk))
+                current_chunk = [line]
+                current_len = line_len
+            else:
+                chunks.append(line[:max_length])
+                current_chunk = [line[max_length:]]
+                current_len = len(current_chunk[0])
+        else:
+            current_chunk.append(line)
+            current_len += line_len
+
+    if current_chunk:
+        chunks.append("\n".join(current_chunk))
+
+    return chunks
