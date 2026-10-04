@@ -43,7 +43,7 @@ def format_loan_item(loan: Any, index: int | None = None) -> str:
     prefix = f"{index}. " if index else "• "
     title = escape(getattr(loan, "title", "Ouvrage sans titre"))
     account = escape(getattr(loan, "account_name", "Titulaire inconnu"))
-    library = escape(getattr(loan, "library", "Bibliothèque"))
+    library = escape(getattr(loan, "location", None) or getattr(loan, "library", "Bibliothèque"))
     due_badge = get_due_badge(getattr(loan, "due_date", None))
     renewal_count = getattr(loan, "renewal_count", 0)
 

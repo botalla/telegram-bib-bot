@@ -91,7 +91,7 @@ class BibService:
             branch_clean = branch_name.strip().lower()
             loans = [
                 loan for loan in loans
-                if branch_clean in (loan.library or "").lower()
+                if branch_clean in (getattr(loan, "location", None) or getattr(loan, "library", "") or "").lower()
             ]
 
         if due_within_days is not None:
@@ -229,12 +229,13 @@ class BibService:
                 continue
 
             thumbnail = getattr(loan, "thumbnail_url", None) or getattr(loan, "default_thumbnail_url", None)
+            loc = getattr(loan, "location", None) or getattr(loan, "library", "")
             results.append({
                 "loan_id": lid,
                 "title": loan.title,
                 "account_name": loan.account_name,
                 "due_date": str(loan.due_date) if loan.due_date else None,
-                "library": loan.library,
+                "library": loc,
                 "cover_url": thumbnail,
             })
 

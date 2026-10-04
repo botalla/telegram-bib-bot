@@ -97,13 +97,13 @@ class Settings(BaseSettings):
         return user_ids
 
     def is_user_allowed(self, user_id: int | None) -> bool:
-        """Vérifie si un ID Telegram est présent dans la liste blanche."""
+        """Vérifie si un ID Telegram est explicitement présent dans la liste blanche."""
         if user_id is None:
             return False
         allowed = self.allowed_users_set
-        # Si aucune restriction n'est configurée (ex: dev local non restreint)
+        # Sécurité stricte : si aucune liste blanche n'est définie, tout est bloqué par défaut
         if not allowed:
-            return True
+            return False
         return user_id in allowed
 
 

@@ -16,10 +16,15 @@ class MockLoan:
     account_name: str
     library: str
     due_date: date
+    location: str = ""
     is_renewable: bool = True
     renewal_count: int = 0
     thumbnail_url: str | None = "https://example.com/cover.jpg"
     default_thumbnail_url: str | None = None
+
+    def __post_init__(self):
+        if not self.location:
+            self.location = self.library
 
 
 @dataclass

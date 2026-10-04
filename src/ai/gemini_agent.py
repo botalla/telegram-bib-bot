@@ -67,7 +67,7 @@ class GeminiAgent:
                         "holding_id": str(getattr(loan, "holding_id", "") or getattr(loan, "barcode", "")),
                         "title": loan.title,
                         "account_name": loan.account_name,
-                        "library": loan.library,
+                        "library": getattr(loan, "location", None) or getattr(loan, "library", "Bibliothèque"),
                         "due_date": str(loan.due_date) if loan.due_date else None,
                         "is_renewable": getattr(loan, "is_renewable", False),
                     }

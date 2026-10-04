@@ -2,8 +2,10 @@
 
 Gère les commandes (/start, /emprunts, /urgences, /membre, /prolonger, /couvertures, /aide),
 les clics de boutons interactifs (CallbackQuery) et le dialogue libre via Gemini.
+Chaque interaction est strictement protégée par le décorateur @check_auth.
 """
 
+import functools
 import logging
 
 from telegram import InputMediaPhoto, Update
@@ -23,9 +25,34 @@ from src.bot.keyboards import (
     get_main_menu_keyboard,
     get_members_keyboard,
 )
+from src.config import get_settings
 from src.services.bib_service import BibService
 
 logger = logging.getLogger(__name__)
+
+
+def check_auth(func):
+    """Décorateur de sécurité : vérifie systématiquement l'ID Telegram avant toute exécution."""
+    @functools.wraps(func)
+    async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user = update.effective_user
+        settings = get_settings()
+
+        if not user or not settings.is_user_allowed(user.id):
+            uid = user.id if user else "Inconnu"
+            uname = user.username if user else "N/A"
+            logger.warning(f"⛔ Tentative d'accès non autorisée par l'utilisateur ID={uid} (@{uname})")
+
+            denied_msg = "⛔ <b>Accès refusé</b> : Ce bot est strictement privé."
+            if update.message:
+                await update.message.reply_text(denied_msg, parse_mode=ParseMode.HTML)
+            elif update.callback_query:
+                await update.callback_query.answer("⛔ Accès refusé : Ce bot est privé.", show_alert=True)
+            return
+
+        return await func(self, update, context, *args, **kwargs)
+
+    return wrapper
 
 
 class BotHandlers:
@@ -84,6 +111,7 @@ class BotHandlers:
                     reply_markup=chunk_markup,
                 )
 
+    @check_auth
     async def start_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /start : Accueil et menu principal."""
         user = update.effective_user
@@ -98,6 +126,7 @@ class BotHandlers:
         )
         await self._send_or_edit(update, context, welcome_text, reply_markup=get_main_menu_keyboard())
 
+    @check_auth
     async def emprunts_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /emprunts : Liste complète des prêts."""
         chat_id = update.effective_chat.id if update.effective_chat else None
@@ -108,6 +137,7 @@ class BotHandlers:
         text = format_loans_list(loans, header_title="Tous les emprunts de la famille")
         await self._send_or_edit(update, context, text, reply_markup=get_back_to_menu_keyboard())
 
+    @check_auth
     async def urgences_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /urgences : Livres à rendre dans les 48 heures."""
         chat_id = update.effective_chat.id if update.effective_chat else None
@@ -118,6 +148,7 @@ class BotHandlers:
         text = format_loans_list(loans, header_title="🔴 Emprunts urgents (retour sous 48h)")
         await self._send_or_edit(update, context, text, reply_markup=get_back_to_menu_keyboard())
 
+    @check_auth
     async def membre_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /membre [nom] : Emprunts d'un titulaire spécifique."""
         chat_id = update.effective_chat.id if update.effective_chat else None
@@ -142,6 +173,7 @@ class BotHandlers:
 
         await self._send_or_edit(update, context, text, reply_markup=keyboard)
 
+    @check_auth
     async def trip_planner_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Organise les retours par bibliothèque."""
         chat_id = update.effective_chat.id if update.effective_chat else None
@@ -152,6 +184,7 @@ class BotHandlers:
         text = format_trip_planner(trips)
         await self._send_or_edit(update, context, text, reply_markup=get_back_to_menu_keyboard())
 
+    @check_auth
     async def batch_renew_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /prolonger : Prolonge les emprunts qui arrivent à échéance."""
         chat_id = update.effective_chat.id if update.effective_chat else None
@@ -162,6 +195,7 @@ class BotHandlers:
         text = format_batch_renewal_report(report)
         await self._send_or_edit(update, context, text, reply_markup=get_back_to_menu_keyboard())
 
+    @check_auth
     async def covers_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /couvertures : Affiche un album photo des couvertures."""
         chat_id = update.effective_chat.id if update.effective_chat else None
@@ -196,6 +230,7 @@ class BotHandlers:
         if chat_id:
             await context.bot.send_media_group(chat_id=chat_id, media=media_group)
 
+    @check_auth
     async def help_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Commande /aide : Guide des fonctionnalités."""
         help_text = (
@@ -217,6 +252,7 @@ class BotHandlers:
         )
         await self._send_or_edit(update, context, help_text, reply_markup=get_back_to_menu_keyboard())
 
+    @check_auth
     async def text_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Gestionnaire des messages en langage naturel délégués à Gemini."""
         if not update.message or not update.message.text:
@@ -232,6 +268,7 @@ class BotHandlers:
         reply_text = response.get("text", "Désolé, je n'ai pas pu traiter votre demande.")
         await self._send_or_edit(update, context, reply_text, reply_markup=get_back_to_menu_keyboard())
 
+    @check_auth
     async def callback_query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Routeur des clics sur les boutons interactifs."""
         query = update.callback_query

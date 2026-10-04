@@ -1,19 +1,16 @@
-"""Configuration du routeur d'événements et filtrage de sécurité Telegram.
+"""Configuration du routeur d'événements Telegram.
 
-Initialise l'application python-telegram-bot, configure les gestionnaires
-et applique la liste blanche stricte des utilisateurs (whitelist).
+Initialise l'application python-telegram-bot et enregistre l'ensemble des
+gestionnaires de commandes, de boutons interactifs et de messages.
 """
 
 import logging
 
-from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
-    ContextTypes,
     MessageHandler,
-    TypeHandler,
     filters,
 )
 
@@ -21,23 +18,6 @@ from src.bot.handlers import BotHandlers
 from src.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
-
-
-async def auth_filter_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Intercepteur de sécurité : vérifie si l'utilisateur Telegram est autorisé."""
-    user = update.effective_user
-    if not user:
-        return
-
-    settings = get_settings()
-    if not settings.is_user_allowed(user.id):
-        logger.warning(
-            f"⛔ Accès rejeté pour l'utilisateur non autorisé ID={user.id} (@{user.username or 'N/A'})"
-        )
-        # Stoppe la propagation de l'événement
-        from telegram.ext import ApplicationHandlerStop
-
-        raise ApplicationHandlerStop()
 
 
 def build_application(settings: Settings | None = None) -> Application:
@@ -50,10 +30,7 @@ def build_application(settings: Settings | None = None) -> Application:
     # Construction de l'application
     app = Application.builder().token(settings.telegram_bot_token or "123456:DUMMY").build()
 
-    # 1. Filtre d'authentification whitelist en priorité absolue (-1)
-    app.add_handler(TypeHandler(Update, auth_filter_middleware), group=-1)
-
-    # 2. Gestionnaires métier
+    # Gestionnaires métier (chacun protégé par le décorateur @check_auth)
     handlers = BotHandlers()
 
     app.add_handler(CommandHandler("start", handlers.start_handler))
