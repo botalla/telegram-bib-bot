@@ -8,7 +8,7 @@
     les comptes de service IAM et configure Workload Identity Federation (WIF) pour GitHub Actions.
 
 .PARAMETER ProjectId
-    L'identifiant unique du projet Google Cloud (ex: biblio-bot-paris-9730).
+    L'identifiant unique du projet Google Cloud (ex: mon-bibliobot-paris).
 
 .PARAMETER GitHubRepo
     Le nom complet du repository GitHub au format 'proprietaire/depot' (défaut: botalla/telegram-bib-bot).
@@ -17,7 +17,7 @@
     La région GCP cible (défaut: europe-west9).
 
 .EXAMPLE
-    .\scripts\setup_infra.ps1 -ProjectId "biblio-bot-paris-9730"
+    .\scripts\setup_infra.ps1 -ProjectId "mon-bibliobot-paris"
 #>
 
 [CmdletBinding()]

@@ -275,12 +275,12 @@ Deux scripts clé-en-main sont disponibles à la racine de `scripts/` selon votr
 
 #### Sur Windows (PowerShell) :
 ```powershell
-.\scripts\setup_infra.ps1 -ProjectId "biblio-bot-paris-9730" -GitHubRepo "botalla/telegram-bib-bot" -Region "europe-west9"
+.\scripts\setup_infra.ps1 -ProjectId "mon-bibliobot-paris" -GitHubRepo "botalla/telegram-bib-bot" -Region "europe-west9"
 ```
 
 #### Sur Linux / macOS (Bash) :
 ```bash
-./scripts/setup_infra.sh biblio-bot-paris-9730 botalla/telegram-bib-bot europe-west9
+./scripts/setup_infra.sh mon-bibliobot-paris botalla/telegram-bib-bot europe-west9
 ```
 
 ```bash
