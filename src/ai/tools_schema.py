@@ -81,7 +81,14 @@ GEMINI_TOOLS_DECLARATIONS: list[dict[str, Any]] = [
                 "user_name": {
                     "type": "STRING",
                     "description": "Filtrer les couvertures sur un membre particulier (ex: 'Camille'). Optionnel.",
-                }
+                },
+                "loan_ids": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "STRING",
+                    },
+                    "description": "Liste d'identifiants uniques ou codes-barres de prêts spécifiques dont on souhaite voir la couverture. Optionnel.",
+                },
             },
         },
     },

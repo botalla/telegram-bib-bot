@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+import src.main as app_module
 from src.main import app
 
 
@@ -46,7 +47,7 @@ async def test_webhook_accepts_valid_secret():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         with (
             patch("src.main.settings.telegram_webhook_secret", "secret_valide_456"),
-            patch("src.main.ptb_app.process_update", new=AsyncMock()),
+            patch("src.main.Update.de_json", return_value=None),
         ):
             response = await client.post(
                 "/webhook",

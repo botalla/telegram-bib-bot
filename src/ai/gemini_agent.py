@@ -104,9 +104,10 @@ class GeminiAgent:
 
             elif name == "get_book_covers":
                 user_filter = args.get("user_name")
-                covers = await self.bib_service.get_book_covers()
+                loan_ids = args.get("loan_ids")
+                covers = await self.bib_service.get_book_covers(loan_ids=loan_ids)
                 if user_filter:
-                    covers = [c for c in covers if user_filter.lower() in (c["account_name"] or "").lower()]
+                    covers = [c for c in covers if user_filter.lower() in (c.get("account_name") or "").lower()]
                 return covers
 
             elif name == "get_family_members":
@@ -120,18 +121,18 @@ class GeminiAgent:
             logger.exception(f"Erreur durant l'exécution de l'outil {name} : {e}")
             return {"error": f"Erreur lors de l'exécution : {e!s}"}
 
-    async def chat(self, user_message: str) -> dict[str, Any]:
-        """Traite une question en langage naturel avec Function Calling."""
+    async def chat(self, user_message: str, max_turns: int = 5) -> dict[str, Any]:
+        """Traite une question en langage naturel avec Function Calling itératif (Multi-turn ReAct)."""
         if not self._client:
             return {
                 "text": "⚠️ L'agent Gemini n'est pas configuré (clé GEMINI_API_KEY manquante). Vous pouvez utiliser les commandes directes comme /emprunts ou /urgences.",
                 "tools_used": [],
+                "media_urls": [],
             }
 
         try:
             from google.genai import types
 
-            # Transformation des schémas d'outils
             tools = [types.Tool(function_declarations=GEMINI_TOOLS_DECLARATIONS)]
 
             config = types.GenerateContentConfig(
@@ -140,27 +141,49 @@ class GeminiAgent:
                 temperature=0.2,
             )
 
-            # Première interaction avec Gemini
-            response = self._client.models.generate_content(
-                model=self.settings.gemini_model,
-                contents=user_message,
-                config=config,
-            )
+            # Historique de conversation itératif (contents)
+            contents: list[Any] = [user_message]
+            tools_executed: list[str] = []
+            collected_media_urls: list[str] = []
 
-            tools_executed = []
+            for turn in range(max_turns):
+                logger.info(f"Gemini conversation loop - Tour {turn + 1}/{max_turns}")
+                response = self._client.models.generate_content(
+                    model=self.settings.gemini_model,
+                    contents=contents,
+                    config=config,
+                )
 
-            # Vérifier si Gemini demande des appels de fonctions
-            function_calls = response.function_calls
+                function_calls = response.function_calls
+                if not function_calls:
+                    # Le modèle a formulé sa réponse finale sans demander de nouvel outil
+                    final_text = response.text or "Voici les informations demandées."
+                    return {
+                        "text": final_text,
+                        "tools_used": tools_executed,
+                        "media_urls": collected_media_urls[:10],
+                    }
 
-            if function_calls:
+                # Le modèle a demandé l'exécution d'un ou plusieurs outils
+                candidate_content = response.candidates[0].content if response.candidates else None
+                if candidate_content:
+                    contents.append(candidate_content)
+
                 tool_results_parts = []
                 for fc in function_calls:
                     fc_name = fc.name
                     fc_args = dict(fc.args) if fc.args else {}
                     tools_executed.append(fc_name)
 
-                    # Exécution asynchrone de l'outil
+                    # Exécution de l'outil
                     result = await self._execute_tool_call(fc_name, fc_args)
+
+                    # Collecte des images si l'outil est get_book_covers
+                    if fc_name == "get_book_covers" and isinstance(result, list):
+                        for item in result:
+                            if isinstance(item, dict) and item.get("cover_url"):
+                                if item["cover_url"] not in collected_media_urls:
+                                    collected_media_urls.append(item["cover_url"])
 
                     tool_results_parts.append(
                         types.Part.from_function_response(
@@ -169,27 +192,15 @@ class GeminiAgent:
                         )
                     )
 
-                # Deuxième appel à Gemini avec les résultats pour synthèse finale
-                second_response = self._client.models.generate_content(
-                    model=self.settings.gemini_model,
-                    contents=[
-                        user_message,
-                        response.candidates[0].content,
-                        types.Content(role="user", parts=tool_results_parts),
-                    ],
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        temperature=0.4,
-                    ),
-                )
-                return {
-                    "text": second_response.text or "Voici les informations demandées.",
-                    "tools_used": tools_executed,
-                }
+                # Ajout des résultats d'outils au contexte
+                contents.append(types.Content(role="user", parts=tool_results_parts))
 
+            # Si on a épuisé le nombre max de tours
+            logger.warning(f"Nombre maximum d'itérations ({max_turns}) atteint pour le prompt : {user_message[:50]}...")
             return {
-                "text": response.text or "Je n'ai pas pu générer de réponse.",
-                "tools_used": [],
+                "text": "J'ai effectué plusieurs vérifications mais je n'ai pas pu finaliser la synthèse. Voici ce que j'ai pu identifier jusqu'ici.",
+                "tools_used": tools_executed,
+                "media_urls": collected_media_urls[:10],
             }
 
         except Exception as e:
@@ -197,4 +208,5 @@ class GeminiAgent:
             return {
                 "text": "Désolé, j'ai rencontré une difficulté lors de l'analyse de votre demande. Vous pouvez utiliser les commandes directes comme /emprunts ou /urgences.",
                 "tools_used": [],
+                "media_urls": [],
             }

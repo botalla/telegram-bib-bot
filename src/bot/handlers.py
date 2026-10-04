@@ -266,6 +266,16 @@ class BotHandlers:
 
         response = await self.gemini_agent.chat(user_text)
         reply_text = response.get("text", "Désolé, je n'ai pas pu traiter votre demande.")
+        media_urls = response.get("media_urls", [])
+
+        # Si des couvertures ont été demandées/collectées par l'agent, envoyer l'album photo
+        if media_urls and chat_id:
+            media_group = [InputMediaPhoto(media=url) for url in media_urls[:10]]
+            try:
+                await context.bot.send_media_group(chat_id=chat_id, media=media_group)
+            except Exception as e:
+                logger.warning(f"Impossible d'envoyer l'album photo Telegram : {e}")
+
         await self._send_or_edit(update, context, reply_text, reply_markup=get_back_to_menu_keyboard())
 
     @check_auth
