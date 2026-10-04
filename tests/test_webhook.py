@@ -1,11 +1,10 @@
 """Tests unitaires pour le serveur FastAPI et l'endpoint Webhook."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-import src.main as app_module
 from src.main import app
 
 
