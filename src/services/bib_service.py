@@ -40,13 +40,13 @@ class BibService:
 
     def _sync_get_family(self) -> Any:
         """Exécution synchrone de la récupération de l'état familial multi-cartes."""
+        import httpx
         from parisbibpy.exceptions import AuthenticationError
 
         # 1. Tentative avec session en cache
         try:
             with self._create_client(use_cached_session=True) as client:
                 family = client.get_family()
-                # Sauvegarder les cookies actuels si disponibles
                 if hasattr(client, "session") and hasattr(client.session, "cookies"):
                     current_cookies = dict(client.session.cookies.items())
                     if current_cookies:
@@ -55,16 +55,24 @@ class BibService:
         except AuthenticationError:
             logger.warning("Session Syracuse expirée ou invalide. Ré-authentification...")
             self.session_store.clear_session()
+        except httpx.TransportError as e:
+            logger.warning(f"Erreur de transport réseau avec session en cache ({e}). Nouvelle tentative...")
 
         # 2. Reconnexion complète avec identifiants
-        with self._create_client(use_cached_session=False) as client:
-            client.login()
-            family = client.get_family()
-            if hasattr(client, "session") and hasattr(client.session, "cookies"):
-                current_cookies = dict(client.session.cookies.items())
-                if current_cookies:
-                    self.session_store.save_session(current_cookies)
-            return family
+        try:
+            with self._create_client(use_cached_session=False) as client:
+                client.login()
+                family = client.get_family()
+                if hasattr(client, "session") and hasattr(client.session, "cookies"):
+                    current_cookies = dict(client.session.cookies.items())
+                    if current_cookies:
+                        self.session_store.save_session(current_cookies)
+                return family
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            logger.error(f"Portail des bibliothèques injoignable (httpx.ConnectError/Timeout) : {e}")
+            raise ConnectionError(
+                "Le portail des bibliothèques de Paris est actuellement inaccessible ou ne répond pas."
+            ) from e
 
     async def get_family_overview(self) -> Any:
         """Récupère l'ensemble des données familiales (asynchrone, non-bloquant)."""

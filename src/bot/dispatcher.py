@@ -27,10 +27,23 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     logger.exception("Exception non interceptée lors du traitement d'un update Telegram :", exc_info=context.error)
 
     if isinstance(update, Update) and update.effective_chat:
+        user_message = "⚠️ Une erreur inattendue est survenue. Veuillez réessayer dans un instant."
+        err_str = str(context.error or "")
+
+        # Si l'erreur est liée au portail de la ville de Paris ou au réseau
+        if isinstance(context.error, ConnectionError) or "ConnectError" in type(context.error).__name__ or "ConnectError" in err_str:
+            user_message = (
+                "🏛️ <b>Portail indisponible</b>\n\n"
+                "Le site des Bibliothèques de la Ville de Paris est temporairement inaccessible ou ne répond pas. "
+                "Veuillez réessayer dans quelques instants."
+            )
+
         try:
+            from telegram.constants import ParseMode
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text="⚠️ Une erreur inattendue est survenue lors du traitement de votre demande. Veuillez réessayer dans un instant.",
+                text=user_message,
+                parse_mode=ParseMode.HTML,
             )
         except Exception as e:
             logger.warning(f"Impossible d'envoyer la notification d'erreur à l'utilisateur : {e}")
