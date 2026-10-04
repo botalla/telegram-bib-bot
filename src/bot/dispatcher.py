@@ -6,10 +6,12 @@ gestionnaires de commandes, de boutons interactifs et de messages.
 
 import logging
 
+from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
+    ContextTypes,
     MessageHandler,
     filters,
 )
@@ -18,6 +20,20 @@ from src.bot.handlers import BotHandlers
 from src.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
+
+
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Capture et journalise toute exception non gérée dans le bot Telegram."""
+    logger.exception("Exception non interceptée lors du traitement d'un update Telegram :", exc_info=context.error)
+
+    if isinstance(update, Update) and update.effective_chat:
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="⚠️ Une erreur inattendue est survenue lors du traitement de votre demande. Veuillez réessayer dans un instant.",
+            )
+        except Exception as e:
+            logger.warning(f"Impossible d'envoyer la notification d'erreur à l'utilisateur : {e}")
 
 
 def build_application(settings: Settings | None = None) -> Application:
@@ -29,6 +45,9 @@ def build_application(settings: Settings | None = None) -> Application:
 
     # Construction de l'application
     app = Application.builder().token(settings.telegram_bot_token or "123456:DUMMY").build()
+
+    # Enregistrement du gestionnaire d'erreur global
+    app.add_error_handler(global_error_handler)
 
     # Gestionnaires métier (chacun protégé par le décorateur @check_auth)
     handlers = BotHandlers()
