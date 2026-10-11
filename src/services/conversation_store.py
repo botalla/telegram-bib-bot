@@ -28,7 +28,6 @@ class ConversationStore:
         self.settings = settings or get_settings()
         self.bucket_name = bucket_name or self.settings.gcs_bucket_name
         self.local_dir = Path(local_dir)
-        self.local_dir.mkdir(parents=True, exist_ok=True)
 
         self._gcs_client = None
         self._gcs_available = False
@@ -96,6 +95,8 @@ class ConversationStore:
 
         # 2. Local
         try:
+            if not self.local_dir.exists():
+                self.local_dir.mkdir(parents=True, exist_ok=True)
             local_file = self._local_file_path(user_id)
             local_file.write_text(payload, encoding="utf-8")
             saved = True

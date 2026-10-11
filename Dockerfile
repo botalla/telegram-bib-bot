@@ -42,6 +42,7 @@ COPY --from=builder /root/.local /home/appuser/.local
 
 # Copie du code applicatif
 COPY --chown=appuser:appuser . /app
+RUN chown -R appuser:appuser /app
 
 USER appuser
 
