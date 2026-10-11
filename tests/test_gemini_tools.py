@@ -104,3 +104,39 @@ async def test_gemini_agent_iterative_chat_loop(mock_settings):
     assert result["tools_used"] == ["get_loans", "get_book_covers"]
     assert result["media_urls"] == ["https://img.url/1.jpg"]
     assert mock_client.models.generate_content.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_gemini_agent_with_history(mock_settings):
+    """Vérifie que GeminiAgent.chat injecte bien l'historique fourni dans contents."""
+    agent = GeminiAgent(settings=mock_settings)
+    mock_client = MagicMock()
+    agent._client = mock_client
+
+    resp = MagicMock()
+    resp.function_calls = None
+    resp.candidates = [MagicMock()]
+    resp.text = "Je prolonge immédiatement ses emprunts."
+
+    mock_client.models.generate_content.return_value = resp
+
+    history = [
+        {"role": "user", "text": "Quels sont les emprunts de Camille ?"},
+        {"role": "model", "text": "Camille a 2 livres empruntés."},
+    ]
+
+    result = await agent.chat("Prolonge-les s'il te plaît", history=history)
+
+    assert result["text"] == "Je prolonge immédiatement ses emprunts."
+    mock_client.models.generate_content.assert_called_once()
+    called_contents = mock_client.models.generate_content.call_args.kwargs["contents"]
+
+    # Doit contenir 3 éléments (2 de l'historique + le nouveau message)
+    assert len(called_contents) == 3
+    assert called_contents[0].role == "user"
+    assert called_contents[0].parts[0].text == "Quels sont les emprunts de Camille ?"
+    assert called_contents[1].role == "model"
+    assert called_contents[1].parts[0].text == "Camille a 2 livres empruntés."
+    assert called_contents[2].role == "user"
+    assert called_contents[2].parts[0].text == "Prolonge-les s'il te plaît"
+

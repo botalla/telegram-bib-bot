@@ -71,6 +71,7 @@ def build_application(settings: Settings | None = None) -> Application:
     app.add_handler(CommandHandler("membre", handlers.membre_handler))
     app.add_handler(CommandHandler("prolonger", handlers.batch_renew_handler))
     app.add_handler(CommandHandler("couvertures", handlers.covers_handler))
+    app.add_handler(CommandHandler(["reset", "clear"], handlers.reset_handler))
     app.add_handler(CommandHandler("aide", handlers.help_handler))
 
     # Clics sur boutons interactifs

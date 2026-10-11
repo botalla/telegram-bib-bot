@@ -3,6 +3,7 @@
 .env
 *.env
 .session_cache.json
+.conversation_cache
 __pycache__
 *.pyc
 *.pyo

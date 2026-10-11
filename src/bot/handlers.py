@@ -27,6 +27,7 @@ from src.bot.keyboards import (
 )
 from src.config import get_settings
 from src.services.bib_service import BibService
+from src.services.conversation_store import ConversationStore
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +59,15 @@ def check_auth(func):
 class BotHandlers:
     """Regroupe l'ensemble des gestionnaires de commandes et messages."""
 
-    def __init__(self, bib_service: BibService | None = None, gemini_agent: GeminiAgent | None = None):
+    def __init__(
+        self,
+        bib_service: BibService | None = None,
+        gemini_agent: GeminiAgent | None = None,
+        conversation_store: ConversationStore | None = None,
+    ):
         self.bib_service = bib_service or BibService()
         self.gemini_agent = gemini_agent or GeminiAgent(bib_service=self.bib_service)
+        self.conversation_store = conversation_store or ConversationStore()
 
     async def _send_or_edit(
         self,
@@ -242,6 +249,7 @@ class BotHandlers:
             "• /membre [nom] — Affiche les livres d'un membre (ex: <code>/membre Camille</code>)\n"
             "• /prolonger — Prolonge automatiquement les prêts imminents (< 3j)\n"
             "• /couvertures — Affiche les couvertures de vos livres\n"
+            "• /reset — Oublie le contexte de conversation récente\n"
             "• /aide — Affiche ce message d'aide\n\n"
             "💬 <b>Langage Naturel (IA Gemini) :</b>\n"
             "Vous pouvez aussi simplement m'écrire comme à un ami :\n"
@@ -253,20 +261,51 @@ class BotHandlers:
         await self._send_or_edit(update, context, help_text, reply_markup=get_back_to_menu_keyboard())
 
     @check_auth
+    async def reset_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Réinitialise la mémoire conversationnelle de l'utilisateur."""
+        user = update.effective_user
+        if user:
+            self.conversation_store.clear_history(user.id)
+        msg = (
+            "🧹 <b>Mémoire réinitialisée !</b>\n\n"
+            "J'ai oublié le contexte de nos récents échanges. Comment puis-je vous aider aujourd'hui ?"
+        )
+        await self._send_or_edit(update, context, msg, reply_markup=get_back_to_menu_keyboard())
+
+    @check_auth
     async def text_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Gestionnaire des messages en langage naturel délégués à Gemini."""
+        """Gestionnaire des messages en langage naturel délégués à Gemini avec mémoire de contexte."""
         if not update.message or not update.message.text:
             return
 
         user_text = update.message.text.strip()
         chat_id = update.effective_chat.id if update.effective_chat else None
+        user = update.effective_user
+        user_id = user.id if user else None
 
         if chat_id:
             await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
-        response = await self.gemini_agent.chat(user_text)
+        # Récupération de l'historique récent (4 dernières heures, max 14 messages)
+        history = None
+        if user_id:
+            history = self.conversation_store.get_recent_history(
+                user_id=user_id,
+                max_hours=4.0,
+                max_messages=14,
+            )
+
+        response = await self.gemini_agent.chat(user_text, history=history)
         reply_text = response.get("text", "Désolé, je n'ai pas pu traiter votre demande.")
         media_urls = response.get("media_urls", [])
+
+        # Persistance de l'échange dans l'historique
+        if user_id and reply_text:
+            self.conversation_store.add_turn(
+                user_id=user_id,
+                user_text=user_text,
+                model_text=reply_text,
+            )
 
         # Si des couvertures ont été demandées/collectées par l'agent, envoyer l'album photo
         if media_urls and chat_id:

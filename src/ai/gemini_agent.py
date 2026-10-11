@@ -121,7 +121,12 @@ class GeminiAgent:
             logger.exception(f"Erreur durant l'exécution de l'outil {name} : {e}")
             return {"error": f"Erreur lors de l'exécution : {e!s}"}
 
-    async def chat(self, user_message: str, max_turns: int = 5) -> dict[str, Any]:
+    async def chat(
+        self,
+        user_message: str,
+        history: list[dict[str, str]] | None = None,
+        max_turns: int = 5,
+    ) -> dict[str, Any]:
         """Traite une question en langage naturel avec Function Calling itératif (Multi-turn ReAct)."""
         if not self._client:
             return {
@@ -141,8 +146,25 @@ class GeminiAgent:
                 temperature=0.2,
             )
 
-            # Historique de conversation itératif (contents)
-            contents: list[Any] = [user_message]
+            # Initialisation de l'historique de conversation (contents)
+            contents: list[Any] = []
+            if history:
+                for item in history:
+                    contents.append(
+                        types.Content(
+                            role=item["role"],
+                            parts=[types.Part.from_text(text=item["text"])],
+                        )
+                    )
+
+            # Ajout du message courant
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=user_message)],
+                )
+            )
+
             tools_executed: list[str] = []
             collected_media_urls: list[str] = []
 

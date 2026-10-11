@@ -28,6 +28,7 @@ ENV/
 .env
 *.env
 .session_cache.json
+.conversation_cache/
 *.key
 *.pem
 credentials.json
