@@ -6,7 +6,9 @@ concises, chaleureuses et adaptées à l'affichage mobile.
 """
 
 import logging
+from datetime import UTC, date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from src.ai.tools_schema import GEMINI_TOOLS_DECLARATIONS
 from src.config import Settings, get_settings
@@ -14,8 +16,64 @@ from src.services.bib_service import BibService
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Tu es BiblioBot, l'assistant d'IA bienveillant et expert des Bibliothèques de la Ville de Paris.
+FRENCH_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+FRENCH_MONTHS = [
+    "",
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
+]
+
+
+def get_current_paris_time() -> datetime:
+    """Retourne la date et l'heure courante sur le fuseau horaire Europe/Paris."""
+    try:
+        return datetime.now(ZoneInfo("Europe/Paris"))
+    except Exception:
+        return datetime.now(UTC)
+
+
+def format_due_status(due_date: date | None, today: date) -> tuple[int | None, str]:
+    """Calcule le delta en jours et un statut explicite pour décharger le LLM de tout calcul de calendrier."""
+    if not due_date:
+        return None, "date inconnue"
+    delta = (due_date - today).days
+    if delta < 0:
+        status = f"en retard de {abs(delta)} jour(s)"
+    elif delta == 0:
+        status = "à rendre aujourd'hui"
+    elif delta == 1:
+        status = "à rendre demain"
+    elif delta <= 3:
+        status = f"urgent (dans {delta} jours)"
+    else:
+        status = f"confortable (dans {delta} jours)"
+    return delta, status
+
+
+def build_system_prompt(now: datetime | None = None) -> str:
+    """Construit la consigne système avec ancrage temporel précis en heure de Paris."""
+    current_dt = now or get_current_paris_time()
+    day_name = FRENCH_DAYS[current_dt.weekday()]
+    month_name = FRENCH_MONTHS[current_dt.month]
+    formatted_now = f"{day_name} {current_dt.day} {month_name} {current_dt.year} à {current_dt.strftime('%H:%M')}"
+
+    return f"""Tu es BiblioBot, l'assistant d'IA bienveillant et expert des Bibliothèques de la Ville de Paris.
 Tu aides une famille à gérer leurs emprunts de livres, bandes dessinées et jeux sans jamais avoir de retard.
+
+CONTEXTE TEMPOREL (OBLIGATOIRE) :
+- Nous sommes actuellement le {formatted_now} (fuseau horaire Europe/Paris).
+- L'année en cours est bien {current_dt.year}.
+- Utilise TOUJOURS cette date de référence pour évaluer les urgences ('aujourd'hui', 'demain', 'ce week-end', les retards et les durées restantes).
 
 Règles de comportement :
 1. Sois chaleureux, concis et parfaitement lisible sur un écran de smartphone Telegram.
@@ -54,6 +112,7 @@ class GeminiAgent:
     async def _execute_tool_call(self, name: str, args: dict[str, Any]) -> Any:
         """Achemine l'appel d'outil Gemini vers la méthode correspondante du BibService."""
         logger.info(f"Exécution du Tool Call Gemini : {name} avec args={args}")
+        today = get_current_paris_time().date()
 
         try:
             if name == "get_loans":
@@ -62,17 +121,20 @@ class GeminiAgent:
                     branch_name=args.get("branch_name"),
                     due_within_days=args.get("due_within_days"),
                 )
-                return [
-                    {
+                res_loans = []
+                for loan in loans:
+                    days_remaining, status_str = format_due_status(loan.due_date, today)
+                    res_loans.append({
                         "holding_id": str(getattr(loan, "holding_id", "") or getattr(loan, "barcode", "")),
                         "title": loan.title,
                         "account_name": loan.account_name,
                         "library": getattr(loan, "location", None) or getattr(loan, "library", "Bibliothèque"),
                         "due_date": str(loan.due_date) if loan.due_date else None,
+                        "days_remaining": days_remaining,
+                        "status": status_str,
                         "is_renewable": getattr(loan, "is_renewable", False),
-                    }
-                    for loan in loans
-                ]
+                    })
+                return res_loans
 
             elif name == "renew_single_loan":
                 loan_id = args.get("loan_id", "")
@@ -84,23 +146,29 @@ class GeminiAgent:
 
             elif name == "get_branches_summary":
                 trips = await self.bib_service.get_trip_planner(branch_filter=args.get("branch_name"))
-                return [
-                    {
+                res_trips = []
+                for t in trips:
+                    days_rem, status_str = format_due_status(t.earliest_due_date, today)
+                    books_list = []
+                    for item in getattr(t, "loans", []):
+                        b_days, b_status = format_due_status(item.due_date, today)
+                        books_list.append({
+                            "title": item.title,
+                            "account_name": item.account_name,
+                            "due_date": str(item.due_date) if item.due_date else None,
+                            "days_remaining": b_days,
+                            "status": b_status,
+                        })
+                    res_trips.append({
                         "library": t.library,
                         "total_items": t.total_items,
                         "earliest_due_date": str(t.earliest_due_date) if t.earliest_due_date else None,
+                        "days_remaining_earliest": days_rem,
+                        "status": status_str,
                         "urgency": getattr(t, "urgency", "normal"),
-                        "books": [
-                            {
-                                "title": item.title,
-                                "account_name": item.account_name,
-                                "due_date": str(item.due_date) if item.due_date else None,
-                            }
-                            for item in getattr(t, "loans", [])
-                        ],
-                    }
-                    for t in trips
-                ]
+                        "books": books_list,
+                    })
+                return res_trips
 
             elif name == "get_book_covers":
                 user_filter = args.get("user_name")
@@ -141,7 +209,7 @@ class GeminiAgent:
             tools = [types.Tool(function_declarations=GEMINI_TOOLS_DECLARATIONS)]
 
             config = types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=build_system_prompt(),
                 tools=tools,
                 temperature=0.2,
             )

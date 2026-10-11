@@ -1,5 +1,6 @@
 """Tests unitaires pour les schémas d'outils et l'agent Gemini."""
 
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -139,4 +140,53 @@ async def test_gemini_agent_with_history(mock_settings):
     assert called_contents[1].parts[0].text == "Camille a 2 livres empruntés."
     assert called_contents[2].role == "user"
     assert called_contents[2].parts[0].text == "Prolonge-les s'il te plaît"
+
+
+def test_build_system_prompt_dynamic_date():
+    """Vérifie que build_system_prompt injecte l'année 2026 et les repères temporels."""
+    from datetime import datetime
+
+    from src.ai.gemini_agent import build_system_prompt
+
+    dt = datetime(2026, 10, 11, 14, 50, tzinfo=UTC)
+    prompt = build_system_prompt(now=dt)
+
+    assert "dimanche 11 octobre 2026 à 14:50" in prompt
+    assert "L'année en cours est bien 2026" in prompt
+    assert "Europe/Paris" in prompt
+
+
+def test_format_due_status_calculation():
+    """Vérifie le calcul automatique des jours restants et statuts d'urgence."""
+    from datetime import date
+
+    from src.ai.gemini_agent import format_due_status
+
+    today = date(2026, 10, 11)
+
+    # Retard
+    days, status = format_due_status(date(2026, 10, 9), today)
+    assert days == -2
+    assert "en retard de 2 jour(s)" in status
+
+    # Aujourd'hui
+    days, status = format_due_status(date(2026, 10, 11), today)
+    assert days == 0
+    assert status == "à rendre aujourd'hui"
+
+    # Demain
+    days, status = format_due_status(date(2026, 10, 12), today)
+    assert days == 1
+    assert status == "à rendre demain"
+
+    # Urgent (< 3 jours)
+    days, status = format_due_status(date(2026, 10, 14), today)
+    assert days == 3
+    assert "urgent (dans 3 jours)" in status
+
+    # Confortable
+    days, status = format_due_status(date(2026, 10, 25), today)
+    assert days == 14
+    assert "confortable" in status
+
 
